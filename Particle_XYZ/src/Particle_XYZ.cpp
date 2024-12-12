@@ -13,10 +13,9 @@
 #include "Adafruit_MQTT/Adafruit_MQTT_SPARK.h"
 #include "Adafruit_MQTT/Adafruit_MQTT.h"
 
-SYSTEM_MODE(AUTOMATIC);
+SYSTEM_MODE(SEMI_AUTOMATIC);
 
-UDP udp;
-Adafruit_BME280 bme;
+UDP osc;
 
 // OSC Sending
 IPAddress outIp(10, 75, 91, 78);//your computer IP
@@ -24,6 +23,9 @@ unsigned int outPort = 1234; //computer incoming port
 
 // ULTRASONIC SENSOR
 int DURATION;
+
+float UltraSonic1;
+float UltraSonic4;
 
 // Ultra Sonic Sensor 1
 const int triggerPinSensor1 = A5;
@@ -41,19 +43,10 @@ TCPClient TheClient;
 Adafruit_MQTT_SPARK mqtt(&TheClient, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO_KEY);
 
 // Setup Feeds to publish or subscribe
-Adafruit_MQTT_Publish mqtttempF = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/tempF");
-Adafruit_MQTT_Publish mqttPa = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/pressPA");
-Adafruit_MQTT_Publish mqttrhumidRH = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/humidRH");
+Adafruit_MQTT_Publish mqttUltraSonic1 = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/UltraSonic1");
+Adafruit_MQTT_Publish mqttUltraSonic4 = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/UltraSonic4");
 
 unsigned int last, lastTime;
-
-// BME 280
-float tempC;
-float pressPA;
-float humidRH;
-
-float tempF;
-float Pa;
 
 
 void setup() {
@@ -61,9 +54,8 @@ void setup() {
   // SERIAL
   Serial.begin(9600);
 
-  bme.begin(0x76);
-
-  udp.begin(0); //necessary even for sending only
+  osc.beginPacket(outIp,outPort);
+  osc.begin(outPort);
 
   // Ultra Sonic Sensor 1
   pinMode(triggerPinSensor1, OUTPUT);
@@ -72,15 +64,14 @@ void setup() {
  // Ultra Sonic Sensor 4
   pinMode(triggerPinSensor4, OUTPUT);
   pinMode(echoPinSensor4, INPUT);
-
+  
+  WiFi.on();
   WiFi.connect();
   while (WiFi.connecting())
   {
     Serial.printf(".");
   }
-
 }
-
 
 void loop() {
 
@@ -112,54 +103,29 @@ void loop() {
 //OSC Sending ULTRA SONIC 1
   OSCMessage outMessage("/ULTRA SONIC 1");
   outMessage.addInt(DISTANCE1);
-  outMessage.send(udp,outIp,outPort);
-  
+  outMessage.send(osc,outIp,outPort);
 
-// BME 280 TEMPERATURE
-  tempC = bme.readTemperature();
-  tempF = tempC*(9/5.0)+32;
-
-// BME 280 PRESSURE
-  pressPA = bme.readPressure();
-  Pa = pressPA/3386;
-
-// BME 280 HUMIDITY
-  humidRH = bme.readHumidity();
- 
-  Serial.printf("TempF  %0.1f\n" , tempF);
-  delay (100);
-  Serial.printf("Pa  %0.1f\n" , Pa);
-  delay (100);
-  Serial.printf("humidRH  %0.1f\n" , humidRH);
+//OSC Sending ULTRA SONIC 2
+  OSCMessage outMessage2 ("/ULTRA SONIC 2");
+  outMessage.addInt(DISTANCE4);
+  outMessage.send(osc,outIp,outPort);
 
 //Adafruit Dashboard publish
- if (mqtt.Update())
+ UltraSonic1 = DISTANCE1;
+
+  if (mqtt.Update())
     {
-      mqtttempF.publish(tempF);
-      Serial.printf("Publishing TempF %0.2f \n", tempF);
-      mqttPa.publish(Pa);
-      Serial.printf("Publishing Pa %0.2f \n", Pa);
-      mqttrhumidRH.publish(humidRH);
-      Serial.printf("Publishing humidityRH %0.2f \n", humidRH);
-    }
-    lastTime = millis();
-  }
+      mqttUltraSonic1.publish(UltraSonic1);
+       Serial.printf("Publishing UltraSonic1 %i \n", UltraSonic1);
+     }
+     lastTime = millis();
 
-void MQTT_connect()
-{
-  int8_t ret;
+ UltraSonic4 = DISTANCE4;
 
-  if (mqtt.connected())
-  {
-    return;
-  }
-  Serial.print("Connecting to MQTT... ");
-  while ((ret = mqtt.connect()) != 0)
-  {
-    Serial.printf("%s\n", (char *)mqtt.connectErrorString(ret));
-    Serial.printf("Retrying MQTT connection in 5 seconds..\n");
-    mqtt.disconnect();
-    delay(5000);
-  }
-  Serial.printf("MQTT Connected!\n");
+  if (mqtt.Update())
+    {
+      mqttUltraSonic4.publish(UltraSonic4);
+       Serial.printf("Publishing UltraSonic4 %i \n", UltraSonic4);
+     }
+     lastTime = millis();
 }
